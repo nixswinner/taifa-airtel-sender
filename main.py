@@ -158,6 +158,18 @@ class AirtelSMSConsumer:
                 if result.success:
                     api_duration.labels(status="success").observe(elapsed)
                     messages_sent_total.labels(status="success").inc()
+                    logger.info(
+                        f"Worker {self.worker_id} — SMS sent",
+                        extra={
+                            "worker_id":         self.worker_id,
+                            "msisdn":            msisdn,
+                            "unique_id":         unique_id,
+                            "channel":           channel,
+                            "message_request_id": result.message_request_id,
+                            "duration_ms":       round(elapsed * 1000),
+                            "api_response":      result.raw_response,
+                        },
+                    )
                     if callback_url:
                         self._send_callback(callback_url, payload)
                     results.append({"unique_id": unique_id, "success": True, "retryable": False})
@@ -167,6 +179,20 @@ class AirtelSMSConsumer:
                     retryable  = getattr(result, "retryable", True)
                     messages_failed_total.labels(error_code=error_code).inc()
                     all_ok = False
+                    logger.error(
+                        f"Worker {self.worker_id} — SMS failed",
+                        extra={
+                            "worker_id":   self.worker_id,
+                            "msisdn":      msisdn,
+                            "unique_id":   unique_id,
+                            "channel":     channel,
+                            "error":       result.error,
+                            "error_code":  error_code,
+                            "retryable":   retryable,
+                            "duration_ms": round(elapsed * 1000),
+                            "api_response": result.raw_response,
+                        },
+                    )
                     results.append({
                         "unique_id":  unique_id,
                         "success":    False,
