@@ -82,6 +82,27 @@ class AirtelSMSConsumer:
         self.connection = pika.BlockingConnection(parameters)
         self.channel    = self.connection.channel()
         self.channel.basic_qos(prefetch_count=Config.PREFETCH_COUNT)
+
+        self.channel.exchange_declare(
+            exchange=Config.RABBITMQ_RETRY_EXCHANGE,
+            exchange_type="direct",
+            durable=True,
+        )
+        self.channel.queue_declare(
+            queue=Config.RABBITMQ_RETRY_QUEUE,
+            durable=True,
+            arguments={
+                "x-dead-letter-exchange":    "",
+                "x-dead-letter-routing-key": Config.RABBITMQ_MAIN_QUEUE,
+            },
+        )
+        self.channel.queue_bind(
+            queue=Config.RABBITMQ_RETRY_QUEUE,
+            exchange=Config.RABBITMQ_RETRY_EXCHANGE,
+            routing_key="retry",
+        )
+        self.channel.queue_declare(queue=Config.RABBITMQ_DLQ, durable=True)
+
         worker_active.labels(worker_id=str(self.worker_id)).set(1)
         logger.info(
             f"Worker {self.worker_id} connected",
@@ -169,7 +190,8 @@ class AirtelSMSConsumer:
 
         except Exception as exc:
             logger.error(f"Worker {self.worker_id} unexpected error: {exc}", exc_info=True)
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            if ch.is_open:
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
     def _republish_for_retry(self, body: bytes, properties, retry_count: int) -> None:
         delay = min(
