@@ -1,0 +1,12 @@
+services:
+  airtel-sms-consumer:
+    image: ${DOCKER_USERNAME:-taifa}/taifa-vas-api:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - consumer-logs:/app/logs
+    network_mode: host   # reach RabbitMQ on the host machine
+
+volumes:
+  consumer-logs:
